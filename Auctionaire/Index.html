@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auctionaire</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            margin: 0;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            box-sizing: border-box;
+        }
+        h1, h2 {
+            color: #1c1e21;
+            text-align: center;
+        }
+        .login {
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        .user-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding: 10px;
+            background-color: #f0f8ff;
+            border-radius: 6px;
+        }
+        input[type="text"], input[type="number"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #1877f2;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #166fe5;
+        }
+        button.logout {
+            width: auto;
+            padding: 8px 12px;
+            font-size: 0.8rem;
+            background-color: #e4e6eb;
+            color: #4b4f56;
+        }
+        .auction-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background-color: #fafafa;
+        }
+        .auction-item h3 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+        .bid-section {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .bid-section input {
+            flex-grow: 1;
+        }
+        .bid-section button {
+            width: auto;
+            flex-shrink: 0;
+            padding: 10px 15px;
+        }
+        #won-items-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        #won-items-list li {
+            background-color: #e7f3ff;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 5px;
+        }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 25px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s, bottom 0.5s;
+        }
+        .toast.show {
+            opacity: 1;
+            bottom: 30px;
+        }
+        .toast.error {
+            background-color: #d93025;
+        }
+        .toast.success {
+            background-color: #2e7d32;
+        }
+        #error-display {
+            color: #d93025;
+            background-color: #fbe9e7;
+            border: 1px solid #ffab91;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 1rem;
+            text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Live Auction</h1>
+
+        <div id="login-section" class="login">
+            <h2>Enter Your Name to Join</h2>
+            <input type="text" id="name-input" placeholder="Your Name">
+            <button onclick="joinAuction()">Join Auction</button>
+        </div>
+
+        <div id="auction-content" style="display: none;">
+            <div id="error-display"></div>
+            
+            <div class="user-info">
+                <span>Welcome, <strong id="username-display"></strong>!</span>
+                <span>Wallet: <strong id="wallet-display">$10000.00</strong></span>
+                <button class="logout" onclick="logout()">Log Out</button>
+            </div>
+
+            <div id="active-auctions">
+                <h2>Active Auctions</h2>
+                <div id="auction-list"></div>
+            </div>
+
+            <div id="won-auctions" style="margin-top: 2rem;">
+                <h2>My Won Items</h2>
+                <ul id="won-items-list"></ul>
+            </div>
+        </div>
+    </div>
+    
+    <div id="toast" class="toast"></div>
+
+    <script>
+        let currentUsername = '';
+        let dataFetchInterval;
+
+        window.onload = function() {
+            const savedUsername = localStorage.getItem('auctionUsername');
+            if (savedUsername) {
+                currentUsername = savedUsername;
+                showAuctionContent();
+            }
+        };
+
+        function joinAuction() {
+            const nameInput = document.getElementById('name-input');
+            const name = nameInput.value.trim();
+            if (name) {
+                currentUsername = name;
+                localStorage.setItem('auctionUsername', currentUsername);
+                showAuctionContent();
+            } else {
+                showToast('Please enter your name.', 'error');
+            }
+        }
+
+        function showAuctionContent() {
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('auction-content').style.display = 'block';
+            document.getElementById('username-display').textContent = currentUsername;
+            startFetchingData();
+        }
+        
+        function logout() {
+            localStorage.removeItem('auctionUsername');
+            clearInterval(dataFetchInterval);
+            window.location.reload();
+        }
+
+        function startFetchingData() {
+            fetchData();
+            dataFetchInterval = setInterval(fetchData, 2000);
+        }
+
+        async function fetchData() {
+            if (!currentUsername) return;
+            const errorDisplay = document.getElementById('error-display');
+            try {
+                const [auctionsRes, statusRes, winsRes] = await Promise.all([
+                    fetch('/api/auctions'),
+                    fetch(`/api/user-status?bidderName=${encodeURIComponent(currentUsername)}`),
+                    fetch(`/api/my-wins?bidderName=${encodeURIComponent(currentUsername)}`)
+                ]);
+
+                if (!auctionsRes.ok || !statusRes.ok || !winsRes.ok) {
+                    throw new Error(`Network response error.`);
+                }
+
+                const auctions = await auctionsRes.json();
+                const status = await statusRes.json();
+                const wonItems = await winsRes.json();
+
+                updateAuctionList(auctions);
+                // **FIXED:** Corrected the syntax error from .wallet to status.wallet
+                updateUserStatus(status.wallet);
+                updateWonItems(wonItems);
+
+                errorDisplay.style.display = 'none';
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                errorDisplay.textContent = 'Connection to the server failed. Please ensure the server is running.';
+                errorDisplay.style.display = 'block';
+            }
+        }
+        
+        function updateAuctionList(auctions) {
+            const auctionListDiv = document.getElementById('auction-list');
+            
+            const focusedElementId = document.activeElement ? document.activeElement.id : null;
+            const inputValues = {};
+            auctionListDiv.querySelectorAll('input[type="number"]').forEach(input => {
+                if (input.value) {
+                    inputValues[input.id] = input.value;
+                }
+            });
+
+            let newHtml = '';
+            if (auctions.length === 0) {
+                newHtml = '<p>No active auctions at the moment.</p>';
+            } else {
+                auctions.forEach(auction => {
+                    newHtml += `
+                        <div class="auction-item" id="auction-${auction.id}">
+                            <h3>${auction.itemName}</h3>
+                            <p><strong>Highest Bid:</strong> $${auction.highestBid.toFixed(2)}</p>
+                            <p><strong>Highest Bidder:</strong> ${auction.highestBidder}</p>
+                            <p><strong>Time Left:</strong> ${auction.remainingTime}s</p>
+                            <div class="bid-section">
+                                <input type="number" id="bid-amount-${auction.id}" placeholder="Your Bid Amount">
+                                <button onclick="placeBid(${auction.id})">Place Bid</button>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            auctionListDiv.innerHTML = newHtml;
+
+            Object.keys(inputValues).forEach(inputId => {
+                const inputElement = document.getElementById(inputId);
+                if (inputElement) {
+                    inputElement.value = inputValues[inputId];
+                }
+            });
+
+            if (focusedElementId) {
+                const focusedElement = document.getElementById(focusedElementId);
+                if (focusedElement) {
+                    focusedElement.focus();
+                }
+            }
+        }
+
+        function updateUserStatus(walletAmount) {
+             document.getElementById('wallet-display').textContent = `$${walletAmount.toFixed(2)}`;
+        }
+
+        function updateWonItems(wonItems) {
+            const wonList = document.getElementById('won-items-list');
+            wonList.innerHTML = '';
+            if (wonItems.length > 0) {
+                wonItems.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = `${item.itemName} - Won for $${parseFloat(item.cost).toFixed(2)}`;
+                    wonList.appendChild(li);
+                });
+            }
+        }
+
+        async function placeBid(auctionId) {
+            const bidAmountInput = document.getElementById(`bid-amount-${auctionId}`);
+            const bidAmount = parseFloat(bidAmountInput.value);
+            if (isNaN(bidAmount) || bidAmount <= 0) {
+                showToast('Please enter a valid bid amount.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/bid', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `auctionId=${auctionId}&bidderName=${encodeURIComponent(currentUsername)}&bidAmount=${bidAmount}`
+                });
+                const resultText = await response.text();
+                if(resultText.startsWith('Success')) {
+                    showToast(resultText, 'success');
+                    fetchData();
+                } else {
+                    showToast(resultText, 'error');
+                }
+            } catch (error) {
+                console.error('Error placing bid:', error);
+                showToast('Failed to place bid. See console for details.', 'error');
+            }
+        }
+        
+        function showToast(message, type = '') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast show';
+            if (type) toast.classList.add(type);
+            setTimeout(() => { toast.className = toast.className.replace('show', ''); }, 3000);
+        }
+    </script>
+</body>
+</html>
+
